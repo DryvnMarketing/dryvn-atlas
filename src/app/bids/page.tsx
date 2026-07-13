@@ -17,6 +17,9 @@ interface BidRow {
   url: string;
   fitScore: number | null;
   fitReason: string | null;
+  projectDescription: string;
+  projectSkills: string;
+  postedAt: string;
 }
 
 const statusStyle: Record<string, { label: string; color: string }> = {
@@ -112,18 +115,32 @@ export default function BidsPage() {
                 )}
               </div>
               {open === b.id && (
-                <div className="mt-3 rounded-md bg-raised border border-edge px-4 py-3 text-sm text-ink2 whitespace-pre-wrap">
-                  {b.fitReason && (
-                    <p className="text-xs text-muted mb-2">Scout: {b.fitReason}</p>
-                  )}
-                  {b.proposal}
-                  {b.url && (
-                    <p className="mt-2">
-                      <a href={b.url} target="_blank" rel="noreferrer" className="text-accent-ink hover:underline text-xs">
-                        View project on Freelancer ↗
-                      </a>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-md bg-raised border border-edge px-4 py-3 text-sm text-ink2">
+                    <p className="text-xs font-medium tracking-wide text-muted uppercase mb-2">
+                      Client brief · posted <span className="font-mono">{b.postedAt?.slice(0, 16).replace("T", " ")}</span>
                     </p>
-                  )}
+                    <div className="whitespace-pre-wrap max-h-96 overflow-y-auto">
+                      {b.projectDescription?.trim() || "No description synced for this project."}
+                    </div>
+                    <p className="text-xs text-muted mt-3">
+                      Wants: {(JSON.parse(b.projectSkills || "[]") as string[]).join(" · ") || "—"}
+                    </p>
+                    {b.url && (
+                      <p className="mt-2">
+                        <a href={b.url} target="_blank" rel="noreferrer" className="text-accent-ink hover:underline text-xs">
+                          View project on Freelancer ↗
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-md bg-raised border border-edge px-4 py-3 text-sm text-ink2">
+                    <p className="text-xs font-medium tracking-wide text-muted uppercase mb-2">Our proposal</p>
+                    {b.fitReason && (
+                      <p className="text-xs text-muted mb-2">Scout: {b.fitReason}</p>
+                    )}
+                    <div className="whitespace-pre-wrap max-h-96 overflow-y-auto">{b.proposal}</div>
+                  </div>
                 </div>
               )}
             </div>
