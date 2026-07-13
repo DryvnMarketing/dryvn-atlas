@@ -41,7 +41,10 @@ export default function OverviewPage() {
         setRunNote(`Cycle failed: ${result.error}`);
       } else {
         setRunNote(
-          `Scout cycle (${result.mode}): ${result.discovered} discovered, ${result.evaluated} evaluated, ${result.drafted} bids drafted, ${result.skipped} skipped.` +
+          `Scout (${result.mode}): ${result.discovered} discovered, ${result.evaluated} evaluated, ${result.drafted} bids drafted, ${result.skipped} skipped.` +
+            (result.comms
+              ? ` Comms: ${result.comms.threadsSynced} threads synced, ${result.comms.drafted} replies drafted (${result.comms.autoSent} auto-sent, ${result.comms.escalated} escalated).`
+              : "") +
             (result.notes?.length ? ` ${result.notes.join(" ")}` : "")
         );
       }

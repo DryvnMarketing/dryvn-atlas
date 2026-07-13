@@ -86,18 +86,55 @@ export async function placeBid(opts: {
   });
 }
 
-/** Fetch message threads for our account. */
-export async function getThreads(): Promise<unknown[]> {
-  const result = await api<{ threads: unknown[] }>(
-    `/messages/0.1/threads/?last_message=true`
-  );
-  return result.threads ?? [];
+export interface FLThread {
+  id: number;
+  context?: { type?: string; id?: number };
+  members?: number[];
+  time_updated?: number;
 }
 
-/** Send a message in a thread. */
+export interface FLMessage {
+  id: number;
+  from_user: number;
+  message: string;
+  time_created: number;
+}
+
+/** Fetch message threads for our account (with member user details). */
+export async function getThreads(): Promise<{
+  threads: FLThread[];
+  users: Record<string, { username?: string; display_name?: string }>;
+}> {
+  const result = await api<{
+    threads: (FLThread & { thread?: FLThread })[];
+    users?: Record<string, { username?: string; display_name?: string }>;
+  }>(`/messages/0.1/threads/?last_message=true&user_details=true&limit=30`);
+  // Some responses nest the thread object; normalize.
+  const threads = (result.threads ?? []).map((t) => ({ ...(t.thread ?? t), id: t.id ?? t.thread?.id }));
+  return { threads: threads as FLThread[], users: result.users ?? {} };
+}
+
+/** Fetch messages in a thread, oldest first. */
+export async function getThreadMessages(threadId: number): Promise<FLMessage[]> {
+  const result = await api<{ messages: FLMessage[] }>(
+    `/messages/0.1/threads/${threadId}/messages/?limit=100`
+  );
+  return (result.messages ?? []).sort((a, b) => a.time_created - b.time_created);
+}
+
+/** Send a message in a thread (form-encoded per Freelancer messaging API). */
 export async function sendMessage(threadId: number, message: string) {
-  return api(`/messages/0.1/threads/${threadId}/messages/`, {
+  const res = await fetch(`${BASE}/messages/0.1/threads/${threadId}/messages/`, {
     method: "POST",
-    body: JSON.stringify({ message }),
+    headers: {
+      "freelancer-oauth-v1": token()!,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ message }).toString(),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Freelancer API ${res.status} sending message: ${body.slice(0, 300)}`);
+  }
+  return res.json();
 }

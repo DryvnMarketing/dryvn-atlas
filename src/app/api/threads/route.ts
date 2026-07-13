@@ -11,7 +11,7 @@ export async function GET() {
     )
     .all() as { id: number }[];
   const msgStmt = db.prepare(
-    "SELECT * FROM messages WHERE threadId = ? ORDER BY sentAt ASC"
+    "SELECT * FROM messages WHERE threadId = ? AND status != 'discarded' ORDER BY sentAt ASC, id ASC"
   );
   const withMessages = threads.map((t) => ({ ...t, messages: msgStmt.all(t.id) }));
   return NextResponse.json(withMessages);
