@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+/* DRYVN deep-ink theme — dashboard is dark-first by design */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b1120;
+  --surface: #111a2e;
+  --surface-raised: #16213a;
+  --border: #232e4a;
+  --foreground: #e6ecf7;
+  --ink-secondary: #9fb0cc;
+  --ink-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-ink: #93c5fd;
+  --good: #34d399;
+  --warning: #fbbf24;
+  --serious: #f87171;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-edge: var(--border);
   --color-foreground: var(--foreground);
+  --color-ink2: var(--ink-secondary);
+  --color-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
