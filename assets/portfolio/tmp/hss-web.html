@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Noto+Sans+SC:wght@700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden}
+body{background:#020C1B;font-family:'Space Grotesk','Noto Sans SC',sans-serif;color:#F0F9FF;position:relative}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(59,130,246,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.07) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 90% 100% at 50% 50%,black 30%,transparent 100%);-webkit-mask-image:radial-gradient(ellipse 90% 100% at 50% 50%,black 30%,transparent 100%)}
+.g1{position:absolute;width:1100px;height:900px;left:-300px;top:-350px;background:radial-gradient(circle,rgba(29,78,216,.35),transparent 65%)}
+.g2{position:absolute;width:1200px;height:1000px;right:-350px;bottom:-450px;background:radial-gradient(circle,rgba(14,165,233,.2),transparent 65%)}
+.wrap{position:relative;height:100%;display:flex;align-items:center;gap:90px;padding:0 110px}
+.left{width:620px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:44px}
+.brand .d{font-size:40px;font-weight:700;color:#3B82F6}
+.brand .rest{font-size:40px;font-weight:700;color:#F0F9FF;margin-left:-14px}
+.kicker{font-family:'Space Mono',monospace;font-size:19px;letter-spacing:.22em;color:#60A5FA;margin-bottom:26px}
+h1{font-size:64px;font-weight:700;letter-spacing:-.02em;line-height:1.04;margin-bottom:30px}
+.desc{font-size:25px;line-height:1.5;color:#94A3B8;margin-bottom:48px;max-width:600px}
+.chips{display:flex;flex-wrap:wrap;gap:18px}
+.chip{background:rgba(5,21,37,.85);border:1px solid rgba(59,130,246,.22);border-radius:14px;padding:20px 28px}
+.chip .n{font-family:'Space Mono',monospace;font-weight:700;font-size:30px;color:#93C5FD;white-space:nowrap}
+.chip .l{font-size:15px;font-weight:500;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+.frame{flex:1;background:#071628;border:1px solid rgba(59,130,246,.25);border-radius:18px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.55),0 0 80px rgba(29,78,216,.18)}
+.bar{display:flex;align-items:center;gap:10px;padding:16px 22px;background:#041020;border-bottom:1px solid rgba(59,130,246,.15)}
+.dot{width:13px;height:13px;border-radius:50%}
+.addr{margin-left:14px;flex:1;background:#020C1B;border-radius:8px;padding:8px 18px;font-family:'Space Mono',monospace;font-size:16px;color:#4A6080}
+.shotbox{height:760px;overflow:hidden}
+.shotbox img{display:block;width:100%;height:auto}
+.baseline{position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,#1D4ED8,#3B82F6 35%,#0EA5E9 70%,transparent)}
+</style></head><body>
+<div class="grid"></div><div class="g1"></div><div class="g2"></div>
+<div class="wrap">
+  <div class="left">
+    <div class="brand"><span class="d">D</span><span class="rest">RYVN</span></div>
+    <div class="kicker">WEB DESIGN + CRO</div>
+    <h1>HSS — Hydraulic Services & Supplies</h1>
+    <div class="desc">Full site design and lead-generation funnel for an industrial supplier.</div>
+    <div class="chips"><div class="chip"><div class="n">−38%</div><div class="l">cost per lead</div></div><div class="chip"><div class="n">Design + build</div><div class="l">delivered in-house</div></div></div>
+  </div>
+  <div class="frame">
+    <div class="bar">
+      <span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span>
+      <span class="addr">hsspe.co.za</span>
+    </div>
+    <div class="shotbox"><img src="file:///C:/Users/info/Documents/GitHub/dryvn-atlas/assets/portfolio/shots/hss-web.png"></div>
+  </div>
+</div>
+<div class="baseline"></div>
+</body></html>
