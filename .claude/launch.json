@@ -3,8 +3,12 @@
   "configurations": [
     {
       "name": "atlas-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\info\\Documents\\GitHub\\dryvn-atlas\\node_modules\\next\\dist\\bin\\next",
+        "dev",
+        "C:\\Users\\info\\Documents\\GitHub\\dryvn-atlas"
+      ],
       "port": 3400,
       "autoPort": true
     }

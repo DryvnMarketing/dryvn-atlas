@@ -6,6 +6,7 @@ export async function POST() {
     const result = await runScoutCycle();
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    const cause = err instanceof Error && err.cause ? ` | cause: ${String(err.cause)}` : "";
+    return NextResponse.json({ error: `${String(err)}${cause}` }, { status: 500 });
   }
 }
