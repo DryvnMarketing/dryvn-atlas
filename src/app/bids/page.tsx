@@ -36,6 +36,7 @@ export default function BidsPage() {
   const [bids, setBids] = useState<BidRow[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [outcome, setOutcome] = useState<Record<number, { ok: boolean; msg: string }>>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/bids");
@@ -49,12 +50,23 @@ export default function BidsPage() {
   async function act(id: number, action: "approve" | "reject") {
     setBusy(id);
     try {
-      await fetch(`/api/bids/${id}`, {
+      const res = await fetch(`/api/bids/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
+      const out = await res.json();
+      setOutcome((s) => ({
+        ...s,
+        [id]: out.error
+          ? { ok: false, msg: `Failed: ${String(out.error).slice(0, 160)}` }
+          : action === "reject"
+            ? { ok: true, msg: "Rejected — will not be placed" }
+            : { ok: true, msg: out.live ? "Bid placed on Freelancer" : "Approved (demo — not sent)" },
+      }));
       await load();
+    } catch (err) {
+      setOutcome((s) => ({ ...s, [id]: { ok: false, msg: `Failed: ${String(err).slice(0, 160)}` } }));
     } finally {
       setBusy(null);
     }
@@ -95,14 +107,26 @@ export default function BidsPage() {
                   <span aria-hidden className="size-2 rounded-full" style={{ background: st.color }} />
                   {st.label}
                 </span>
-                {b.status === "pending_approval" && (
+                {outcome[b.id] && (
+                  <span
+                    className="text-xs font-medium shrink-0 rounded-md px-3 py-1.5 border"
+                    style={{
+                      color: outcome[b.id].ok ? "var(--good)" : "var(--serious)",
+                      borderColor: outcome[b.id].ok ? "var(--good)" : "var(--serious)",
+                      background: outcome[b.id].ok ? "rgba(52,211,153,0.08)" : "rgba(248,113,113,0.08)",
+                    }}
+                  >
+                    {outcome[b.id].ok ? "✓" : "✗"} {outcome[b.id].msg}
+                  </span>
+                )}
+                {b.status === "pending_approval" && !outcome[b.id]?.ok && (
                   <span className="flex gap-2 shrink-0">
                     <button
                       onClick={() => act(b.id, "approve")}
                       disabled={busy === b.id}
                       className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                     >
-                      Approve & place
+                      {busy === b.id ? "Placing…" : "Approve & place"}
                     </button>
                     <button
                       onClick={() => act(b.id, "reject")}
