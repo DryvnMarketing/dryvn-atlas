@@ -27,6 +27,14 @@ Consider: skill match, scope clarity, budget sanity for the ask, red flags
 (vague scope, unrealistic expectations, ratings risk).`,
     `Our services: ${ourSkills.join(", ")}
 
+Our proof points (score higher where these give us an evidenced edge, lower
+where we'd be stretching): we design AND build in-house; we run our own SaaS
+products (Dryvn Pulse — fleet/parts operations, Brandflow — AI social media);
+we built a fully custom 6-module ERP; strong dashboard/admin-panel and
+dark-UI work; logo + brand identity systems; industrial-sector experience
+(construction equipment, hydraulics); React/Next.js/Node/TypeScript stack;
+Shopify and WordPress when they fit.
+
 PROJECT
 Title: ${project.title}
 Budget: $${project.budgetMin}–$${project.budgetMax}

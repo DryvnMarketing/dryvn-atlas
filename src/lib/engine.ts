@@ -78,10 +78,12 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
 
     const capacity = checkCapacity(project.budgetMax);
     const bid = await draftBid({ ...project, estimatedDays: fit.estimatedDays });
+    // The bid window caps what we charge, not just which projects we enter.
+    const amount = Math.min(bid.amount, s.bidMaxUsd);
     const status = s.autoBid && capacity.canBid ? "approved" : "pending_approval";
     db.prepare(
       "INSERT INTO bids (projectId, amount, periodDays, proposal, status) VALUES (?, ?, ?, ?, ?)"
-    ).run(project.id, bid.amount, bid.periodDays, bid.proposal, status);
+    ).run(project.id, amount, bid.periodDays, bid.proposal, status);
     db.prepare("UPDATE projects SET status = 'bidding' WHERE id = ?").run(project.id);
     drafted++;
     logActivity("bid", "draft", `$${bid.amount} / ${bid.periodDays}d on "${project.title}" → ${status}`);
@@ -94,8 +96,34 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
   return { discovered, evaluated, drafted, skipped, mode: live ? "live" : "demo", notes };
 }
 
+/**
+ * Turn the service catalog into targeted search queries so the pipeline fills
+ * with relevant projects instead of a random marketplace sample. Extra alias
+ * queries cover common client wording our formal skill names would miss.
+ */
+function searchQueriesFromSkills(skills: string[]): string[] {
+  const aliases = ["website", "logo design", "landing page", "shopify", "wordpress", "react", "dashboard", "web app", "branding", "graphic design"];
+  const fromSkills = skills.map((s) => s.replace(/[&/]/g, " ").replace(/\s+/g, " ").trim().toLowerCase());
+  return [...new Set([...fromSkills, ...aliases])].slice(0, 14);
+}
+
 async function fetchLiveProjects(min: number, max: number, skills: string[]) {
-  const results = await freelancer.searchProjects({ minBudget: min, maxBudget: max, limit: 50 });
+  const queries = searchQueriesFromSkills(skills);
+  const seen = new Set<number>();
+  const results: Awaited<ReturnType<typeof freelancer.searchProjects>> = [];
+  for (const query of queries) {
+    try {
+      const batch = await freelancer.searchProjects({ query, minBudget: min, maxBudget: max, limit: 25 });
+      for (const p of batch) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          results.push(p);
+        }
+      }
+    } catch {
+      // One failed query shouldn't kill the cycle; the rest still run.
+    }
+  }
   return results.map((p) => ({
     externalId: p.id,
     title: p.title,
