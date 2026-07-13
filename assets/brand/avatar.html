@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 800px; overflow: hidden; }
+  body {
+    background: #020C1B;
+    font-family: 'Space Grotesk', sans-serif;
+    position: relative;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .glow {
+    position: absolute; width: 900px; height: 900px; left: -50px; top: -150px;
+    background: radial-gradient(circle, rgba(29,78,216,0.4), transparent 60%);
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(circle at 50% 50%, black 20%, transparent 85%);
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, black 20%, transparent 85%);
+  }
+  .mark {
+    position: relative;
+    font-size: 430px; font-weight: 700; line-height: 0.95;
+    letter-spacing: -0.03em;
+    background: linear-gradient(160deg, #93C5FD 0%, #3B82F6 45%, #1D4ED8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 120px rgba(59,130,246,0.35);
+  }
+  .word {
+    position: relative;
+    margin-top: 34px;
+    font-family: 'Space Mono', monospace;
+    font-size: 44px; font-weight: 700;
+    letter-spacing: 0.52em; text-indent: 0.52em;
+    color: #F0F9FF;
+  }
+  .rule {
+    position: relative; margin-top: 30px; width: 300px; height: 4px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, #3B82F6, transparent);
+  }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="grid"></div>
+  <div class="mark">D</div>
+  <div class="word">DRYVN</div>
+  <div class="rule"></div>
+</body>
+</html>

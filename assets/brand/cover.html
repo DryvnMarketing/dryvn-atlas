@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 400px; overflow: hidden; }
+  body {
+    background: #020C1B;
+    font-family: 'Space Grotesk', sans-serif;
+    color: #F0F9FF;
+    position: relative;
+  }
+  /* blueprint grid */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.07) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 90% 100% at 50% 50%, black 30%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 100% at 50% 50%, black 30%, transparent 100%);
+  }
+  .glow-1 {
+    position: absolute; width: 900px; height: 700px; left: -200px; top: -300px;
+    background: radial-gradient(circle, rgba(29,78,216,0.35), transparent 65%);
+  }
+  .glow-2 {
+    position: absolute; width: 1000px; height: 800px; right: -250px; bottom: -400px;
+    background: radial-gradient(circle, rgba(14,165,233,0.22), transparent 65%);
+  }
+  .wrap {
+    position: relative; height: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 110px;
+  }
+  .logo { font-size: 92px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .logo .d { color: #3B82F6; }
+  .tagline { margin-top: 18px; font-size: 27px; font-weight: 500; color: #94A3B8; letter-spacing: 0.01em; }
+  .tagline b { color: #F0F9FF; font-weight: 600; }
+  .services {
+    margin-top: 26px; font-family: 'Space Mono', monospace; font-size: 16.5px;
+    color: #60A5FA; letter-spacing: 0.06em;
+  }
+  .services span { color: #4A6080; padding: 0 10px; }
+  .stats { display: flex; flex-direction: column; gap: 18px; }
+  .chip {
+    display: flex; align-items: baseline; gap: 16px;
+    background: rgba(5,21,37,0.85);
+    border: 1px solid rgba(59,130,246,0.22);
+    border-radius: 14px;
+    padding: 18px 30px;
+    min-width: 430px;
+  }
+  .chip .num {
+    font-family: 'Space Mono', monospace; font-weight: 700; font-size: 34px;
+    color: #93C5FD; white-space: nowrap;
+  }
+  .chip .lbl {
+    font-size: 16px; font-weight: 500; color: #94A3B8;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .baseline {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
+    background: linear-gradient(90deg, #1D4ED8, #3B82F6 35%, #0EA5E9 70%, transparent);
+  }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="wrap">
+    <div>
+      <div class="logo"><span class="d">D</span>RYVN</div>
+      <div class="tagline">We don't just market. <b>We Dryvn.</b></div>
+      <div class="services">WEBSITES<span>/</span>WEB APPS<span>/</span>SAAS<span>/</span>DASHBOARDS<span>/</span>BRAND IDENTITY</div>
+    </div>
+    <div class="stats">
+      <div class="chip"><span class="num">+280%</span><span class="lbl">Organic reach delivered</span></div>
+      <div class="chip"><span class="num">4.1×</span><span class="lbl">Return on ad spend</span></div>
+      <div class="chip"><span class="num">100%</span><span class="lbl">Designed &amp; built in-house</span></div>
+    </div>
+  </div>
+  <div class="baseline"></div>
+</body>
+</html>
