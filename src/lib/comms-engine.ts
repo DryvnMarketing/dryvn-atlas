@@ -99,18 +99,34 @@ async function syncThreads(result: CommsRunResult) {
 async function draftPass(result: CommsRunResult, autoReply: boolean) {
   const db = getDb();
   const threads = db.prepare(
-    `SELECT t.id, t.externalThreadId, t.clientName, p.title AS projectTitle
+    `SELECT t.id, t.externalThreadId, t.clientName, p.title AS projectTitle,
+            p.budgetMax AS projectBudgetMax
      FROM threads t JOIN projects p ON p.id = t.projectId`
-  ).all() as { id: number; externalThreadId: number | null; clientName: string; projectTitle: string }[];
+  ).all() as { id: number; externalThreadId: number | null; clientName: string; projectTitle: string; projectBudgetMax: number }[];
 
   for (const t of threads) {
+    try {
+      await handleThread(t, result, autoReply);
+    } catch (err) {
+      logActivity("comms", "thread_error", `${t.clientName} on "${t.projectTitle}": ${String(err).slice(0, 200)}`);
+    }
+  }
+}
+
+async function handleThread(
+  t: { id: number; externalThreadId: number | null; clientName: string; projectTitle: string; projectBudgetMax: number },
+  result: CommsRunResult,
+  autoReply: boolean
+) {
+  const db = getDb();
+  {
     const history = db.prepare(
       "SELECT direction, body, status FROM messages WHERE threadId = ? AND status != 'discarded' ORDER BY sentAt ASC, id ASC"
     ).all(t.id) as { direction: "inbound" | "outbound"; body: string; status: string }[];
-    if (!history.length) continue;
+    if (!history.length) return;
     const last = history[history.length - 1];
     const hasPendingDraft = history.some((m) => m.status === "pending_approval");
-    if (last.direction !== "inbound" || hasPendingDraft) continue;
+    if (last.direction !== "inbound" || hasPendingDraft) return;
 
     const draft = await draftReply({
       projectTitle: t.projectTitle,
@@ -118,18 +134,29 @@ async function draftPass(result: CommsRunResult, autoReply: boolean) {
     });
     result.drafted++;
 
-    const canAutoSend = autoReply && !draft.escalate && freelancer.isLive() && t.externalThreadId;
+    // Auto-send only in real project conversations — support/system threads
+    // (stub projects, budgetMax 0) always queue for human review.
+    const canAutoSend =
+      autoReply && !draft.escalate && freelancer.isLive() && t.externalThreadId && t.projectBudgetMax > 0;
+    let autoSendFailed: string | null = null;
     if (canAutoSend) {
-      await freelancer.sendMessage(t.externalThreadId!, draft.body);
-      db.prepare(
-        "INSERT INTO messages (threadId, direction, body, status) VALUES (?, 'outbound', ?, 'sent')"
-      ).run(t.id, draft.body);
-      result.autoSent++;
-      logActivity("comms", "auto_replied", `Auto-reply sent to ${t.clientName} on "${t.projectTitle}"`);
-    } else {
+      try {
+        await freelancer.sendMessage(t.externalThreadId!, draft.body);
+        db.prepare(
+          "INSERT INTO messages (threadId, direction, body, status) VALUES (?, 'outbound', ?, 'sent')"
+        ).run(t.id, draft.body);
+        result.autoSent++;
+        logActivity("comms", "auto_replied", `Auto-reply sent to ${t.clientName} on "${t.projectTitle}"`);
+      } catch (err) {
+        // Thread may be closed or restricted — keep the draft, keep the cycle alive.
+        autoSendFailed = String(err).slice(0, 200);
+        logActivity("comms", "send_failed", `${t.clientName} on "${t.projectTitle}": ${autoSendFailed}`);
+      }
+    }
+    if (!canAutoSend || autoSendFailed) {
       db.prepare(
         "INSERT INTO messages (threadId, direction, body, status, escalateReason) VALUES (?, 'outbound', ?, 'pending_approval', ?)"
-      ).run(t.id, draft.body, draft.escalateReason);
+      ).run(t.id, draft.body, autoSendFailed ? `Auto-send failed (thread may be closed): ${autoSendFailed}` : draft.escalateReason);
       if (draft.escalate) {
         result.escalated++;
         logActivity("comms", "escalated", `${t.clientName} on "${t.projectTitle}": ${draft.escalateReason ?? "needs your decision"}`);
