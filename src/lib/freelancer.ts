@@ -116,8 +116,10 @@ export async function getThreads(): Promise<{
 
 /** Fetch messages in a thread, oldest first. */
 export async function getThreadMessages(threadId: number): Promise<FLMessage[]> {
+  const params = new URLSearchParams({ limit: "100" });
+  params.append("threads[]", String(threadId));
   const result = await api<{ messages: FLMessage[] }>(
-    `/messages/0.1/threads/${threadId}/messages/?limit=100`
+    `/messages/0.1/messages/?${params.toString()}`
   );
   return (result.messages ?? []).sort((a, b) => a.time_created - b.time_created);
 }
