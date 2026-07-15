@@ -62,7 +62,9 @@ export default function ChatsPage() {
         body: JSON.stringify({ action, body: edits[msgId] }),
       });
       const out = await res.json();
-      if (out.error) alert(out.error);
+      if (out.undeliverable) setSyncNote(out.message);
+      else if (out.error) setSyncNote(`Send failed: ${String(out.error).slice(0, 160)}`);
+      else setSyncNote(action === "send" ? "Reply sent to client." : "Draft discarded.");
       await load();
     } finally {
       setBusy(null);

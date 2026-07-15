@@ -105,7 +105,8 @@ async function draftPass(result: CommsRunResult, autoReply: boolean) {
   const threads = db.prepare(
     `SELECT t.id, t.externalThreadId, t.clientName, p.title AS projectTitle,
             p.budgetMax AS projectBudgetMax
-     FROM threads t JOIN projects p ON p.id = t.projectId`
+     FROM threads t JOIN projects p ON p.id = t.projectId
+     WHERE COALESCE(t.closed, 0) = 0`
   ).all() as { id: number; externalThreadId: number | null; clientName: string; projectTitle: string; projectBudgetMax: number }[];
 
   for (const t of threads) {

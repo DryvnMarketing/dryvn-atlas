@@ -36,7 +36,20 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       try {
         await freelancer.sendMessage(msg.externalThreadId, finalBody);
       } catch (err) {
-        return NextResponse.json({ error: String(err) }, { status: 502 });
+        const text = String(err);
+        // Conversation closed / recipient removed (often a banned scam account).
+        // Clear the draft and mute the thread so it stops re-drafting failed sends.
+        if (/\b403\b|PERMISSION_DENIED|no longer able to message/i.test(text)) {
+          db.prepare("UPDATE messages SET status = 'discarded' WHERE id = ?").run(id);
+          db.prepare("UPDATE threads SET closed = 1 WHERE id = (SELECT threadId FROM messages WHERE id = ?)").run(id);
+          logActivity("comms", "undeliverable", `Conversation with ${msg.clientName} is closed on Freelancer — draft cleared`);
+          return NextResponse.json({
+            ok: false,
+            undeliverable: true,
+            message: `Freelancer won't deliver this — you can no longer message ${msg.clientName} (the conversation is closed, usually because that account was removed). The draft has been cleared and this thread muted.`,
+          });
+        }
+        return NextResponse.json({ error: text }, { status: 502 });
       }
     }
     db.prepare(

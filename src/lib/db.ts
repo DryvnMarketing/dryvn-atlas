@@ -90,6 +90,7 @@ function migrate(db: Database.Database) {
   // Post-v1 migrations (idempotent)
   try { db.exec("ALTER TABLE messages ADD COLUMN externalId INTEGER"); } catch { /* exists */ }
   try { db.exec("ALTER TABLE messages ADD COLUMN escalateReason TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE threads ADD COLUMN closed INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external ON messages(externalId) WHERE externalId IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_external ON threads(externalThreadId) WHERE externalThreadId IS NOT NULL;
