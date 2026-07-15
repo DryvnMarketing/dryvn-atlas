@@ -43,3 +43,6 @@ next-env.d.ts
 # Atlas local database and env
 /data/
 !.env.example
+
+# Client-branded preview mockups — keep OUT of the repo (brand + AI images)
+assets/previews/

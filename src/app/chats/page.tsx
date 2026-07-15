@@ -23,12 +23,31 @@ export default function ChatsPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const t: ThreadRow[] = await (await fetch("/api/threads")).json();
     setThreads(t);
     setSelected((cur) => cur ?? (t.length ? t[0].id : null));
   }, []);
+
+  async function syncNow() {
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      const res = await fetch("/api/comms/run", { method: "POST" });
+      const r = await res.json();
+      setSyncNote(
+        r.error
+          ? `Sync failed: ${String(r.error).slice(0, 140)}`
+          : `Synced ${r.threadsSynced} conversation(s), ${r.messagesSynced} new message(s), ${r.drafted} reply draft(s) queued.`
+      );
+      await load();
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -58,17 +77,27 @@ export default function ChatsPage() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-semibold">Chats</h1>
-        <p className="text-sm text-ink2 mt-0.5">
-          Every client conversation, synced from Freelancer. The Comms agent drafts replies;
-          pricing, scope and deadline decisions always escalate to you.
-          {pendingCount > 0 && (
-            <span className="ml-2" style={{ color: "var(--warning)" }}>
-              {pendingCount} draft{pendingCount > 1 ? "s" : ""} awaiting your review.
-            </span>
-          )}
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Chats</h1>
+          <p className="text-sm text-ink2 mt-0.5">
+            Every client conversation, synced from Freelancer. The Comms agent drafts replies;
+            pricing, scope and deadline decisions always escalate to you.
+            {pendingCount > 0 && (
+              <span className="ml-2" style={{ color: "var(--warning)" }}>
+                {pendingCount} draft{pendingCount > 1 ? "s" : ""} awaiting your review.
+              </span>
+            )}
+          </p>
+          {syncNote && <p className="text-xs text-ink2 mt-1">{syncNote}</p>}
+        </div>
+        <button
+          onClick={syncNow}
+          disabled={syncing}
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 shrink-0"
+        >
+          {syncing ? "Syncing…" : "Sync now"}
+        </button>
       </header>
 
       {threads.length === 0 ? (
