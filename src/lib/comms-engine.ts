@@ -34,7 +34,11 @@ export async function runCommsCycle(): Promise<CommsRunResult> {
   // Phase 2: draft replies for any local thread awaiting one
   await draftPass(result, s.autoReply);
 
-  logActivity("comms", "cycle_complete", `${result.threadsSynced} threads, ${result.messagesSynced} new messages, ${result.drafted} drafts (${result.autoSent} auto-sent, ${result.escalated} escalated)`);
+  // Only log when something actually happened — keeps the feed clean under
+  // 5-minute auto-polling.
+  if (result.messagesSynced > 0 || result.drafted > 0) {
+    logActivity("comms", "cycle_complete", `${result.threadsSynced} threads, ${result.messagesSynced} new messages, ${result.drafted} drafts (${result.autoSent} auto-sent, ${result.escalated} escalated)`);
+  }
   return result;
 }
 
