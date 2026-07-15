@@ -11,20 +11,44 @@ export interface FitAssessment {
  * Scout agent: scores how well a discovered project fits DRYVN's skills and
  * quality bar, and estimates delivery time (feeds the capacity governor).
  */
+export interface ScoutContext {
+  bidMin: number;
+  bidMax: number;
+  buildingReviews: boolean; // true while we deliberately chase small jobs for ratings
+}
+
 export async function assessFit(
   project: Pick<FreelancerProject, "title" | "description" | "budgetMin" | "budgetMax" | "skills">,
-  ourSkills: string[]
+  ourSkills: string[],
+  ctx: ScoutContext = { bidMin: 40, bidMax: 300, buildingReviews: true }
 ): Promise<FitAssessment> {
   if (!claudeLive()) return heuristicFit(project, ourSkills);
+
+  const strategy = ctx.buildingReviews
+    ? `CURRENT STRATEGY — building reviews: DRYVN is deliberately targeting SMALL,
+quick jobs in the $${ctx.bidMin}–$${ctx.bidMax} range to earn 5-star reviews and
+ratings fast. A LOW BUDGET IS NOT A RED FLAG right now — a small, well-scoped
+job we can deliver cleanly in 1–3 days is exactly what we want and should score
+HIGH (75–95). Judge SCOPE-vs-BUDGET REALISM, not the absolute number:
+- Small budget + small, clear task (a logo, one landing page, a WordPress fix,
+  a few graphics) = GREAT fit, score high.
+- Small budget + huge ask (a full custom SaaS, a multi-page app, "Uber clone"
+  for $80) = genuine mismatch, score low.
+Reserve low scores for: scope that clearly can't be delivered for the money,
+vague/confusing briefs, ratings risk (abusive-sounding clients), or work
+outside our skills entirely (data entry, article writing, SEO backlinks,
+lead lists, virtual assistant).`
+    : `Judge skill match, scope clarity, and whether the budget is realistic for
+the scope. Below 50 means skip.`;
 
   const raw = await complete(
     `${DRYVN_VOICE}
 
 You are DRYVN's Scout agent. Assess whether this Freelancer.com project is a
 good fit. Respond with ONLY a JSON object: {"fitScore": 0-100, "fitReason":
-"one sentence", "estimatedDays": number}. Score harshly: below 50 means skip.
-Consider: skill match, scope clarity, budget sanity for the ask, red flags
-(vague scope, unrealistic expectations, ratings risk).`,
+"one sentence", "estimatedDays": number}.
+
+${strategy}`,
     `Our services: ${ourSkills.join(", ")}
 
 Our proof points (score higher where these give us an evidenced edge, lower

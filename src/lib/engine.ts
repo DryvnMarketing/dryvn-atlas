@@ -60,7 +60,11 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
       continue;
     }
 
-    const fit = await assessFit(project, skills);
+    const fit = await assessFit(project, skills, {
+      bidMin: s.bidMinUsd,
+      bidMax: s.bidMaxUsd,
+      buildingReviews: s.bidMaxUsd <= 300, // small-window months = review-building mode
+    });
     evaluated++;
     db.prepare(
       "UPDATE projects SET fitScore = ?, fitReason = ?, estimatedDays = ?, status = ? WHERE id = ?"
