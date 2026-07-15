@@ -32,11 +32,14 @@ const statusStyle: Record<string, { label: string; color: string }> = {
   lost: { label: "Lost", color: "var(--ink-muted)" },
 };
 
+const HIDDEN_STATUSES = new Set(["rejected", "lost", "retracted"]);
+
 export default function BidsPage() {
   const [bids, setBids] = useState<BidRow[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<Record<number, { ok: boolean; msg: string }>>({});
+  const [showRejected, setShowRejected] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/bids");
@@ -46,6 +49,9 @@ export default function BidsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const hiddenCount = bids.filter((b) => HIDDEN_STATUSES.has(b.status)).length;
+  const visible = showRejected ? bids : bids.filter((b) => !HIDDEN_STATUSES.has(b.status));
 
   async function act(id: number, action: "approve" | "reject") {
     setBusy(id);
@@ -74,20 +80,34 @@ export default function BidsPage() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-semibold">Bids pipeline</h1>
-        <p className="text-sm text-ink2 mt-0.5">
-          Every proposal the Bid agent drafts lands here. Nothing goes live without a green light while approval gate is on.
-        </p>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Bids pipeline</h1>
+          <p className="text-sm text-ink2 mt-0.5">
+            Every proposal the Bid agent drafts lands here. Nothing goes live without a green light while approval gate is on.
+          </p>
+        </div>
+        {hiddenCount > 0 && (
+          <label className="text-xs text-ink2 flex items-center gap-2 shrink-0">
+            <input
+              type="checkbox"
+              checked={showRejected}
+              onChange={(e) => setShowRejected(e.target.checked)}
+            />
+            Show rejected ({hiddenCount})
+          </label>
+        )}
       </header>
 
       <div className="rounded-lg border border-edge bg-surface divide-y divide-edge">
-        {bids.length === 0 && (
+        {visible.length === 0 && (
           <div className="px-4 py-8 text-sm text-muted">
-            No bids yet. Run a scout cycle from the Overview page.
+            {bids.length === 0
+              ? "No bids yet. Run a scout cycle from the Overview page."
+              : "No active bids. Tick “Show rejected” to see past ones."}
           </div>
         )}
-        {bids.map((b) => {
+        {visible.map((b) => {
           const st = statusStyle[b.status] ?? { label: b.status, color: "var(--ink-muted)" };
           return (
             <div key={b.id} className="px-4 py-3">
