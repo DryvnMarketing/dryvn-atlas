@@ -10,6 +10,8 @@ interface Overview {
     projectsDiscovered: number;
     projectsActive: number;
     projectsDelivered: number;
+    bidsThisMonth: number;
+    repliesThisMonth: number;
   };
   capacity: { canAcceptAward: boolean; reason: string; activeCount: number };
   settings: { bidMinUsd: number; bidMaxUsd: number; maxConcurrentProjects: number; autoBid: boolean };
@@ -60,6 +62,13 @@ export default function OverviewPage() {
     { label: "Bids placed today", value: data.stats.bidsToday },
     { label: "Awaiting your approval", value: data.stats.bidsPendingApproval },
     { label: "Bids placed total", value: data.stats.bidsPlacedTotal },
+    { label: "Bids this month", value: data.stats.bidsThisMonth },
+    {
+      label: "Reply rate this month",
+      value: data.stats.bidsThisMonth
+        ? `${Math.round((data.stats.repliesThisMonth / data.stats.bidsThisMonth) * 1000) / 10}%`
+        : "—",
+    },
     {
       label: "Active projects",
       value: `${data.stats.projectsActive} / ${data.settings.maxConcurrentProjects}`,

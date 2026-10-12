@@ -15,6 +15,8 @@ export async function GET() {
     projectsDiscovered: count(`SELECT COUNT(*) n FROM projects`),
     projectsActive: count(`SELECT COUNT(*) n FROM projects WHERE status IN ('awarded','active')`),
     projectsDelivered: count(`SELECT COUNT(*) n FROM projects WHERE status = 'delivered'`),
+    bidsThisMonth: count(`SELECT COUNT(*) n FROM bids WHERE status IN ('placed','won','lost') AND strftime('%Y-%m', COALESCE(placedAt, createdAt)) = strftime('%Y-%m', 'now')`),
+    repliesThisMonth: count(`SELECT COUNT(*) n FROM bids WHERE repliedAt IS NOT NULL AND strftime('%Y-%m', COALESCE(placedAt, createdAt)) = strftime('%Y-%m', 'now')`),
   };
 
   const capacity = checkCapacity();

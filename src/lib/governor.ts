@@ -5,9 +5,16 @@ import type { Settings } from "./types";
 // Ratings and brand quality outrank booking volume.
 
 export function getSettings(): Settings {
-  const row = getDb().prepare("SELECT * FROM settings WHERE id = 1").get() as
-    Settings & { autoBid: number; autoReply: number };
-  return { ...row, autoBid: !!row.autoBid, autoReply: !!row.autoReply };
+  const row = getDb().prepare("SELECT * FROM settings WHERE id = 1").get() as unknown as
+    Omit<Settings, "autoBid" | "autoReply" | "attachPortfolio" | "abTestScripts"> &
+    { autoBid: number; autoReply: number; attachPortfolio: number; abTestScripts: number };
+  return {
+    ...row,
+    autoBid: !!row.autoBid,
+    autoReply: !!row.autoReply,
+    attachPortfolio: !!row.attachPortfolio,
+    abTestScripts: !!row.abTestScripts,
+  };
 }
 
 export interface CapacityCheck {

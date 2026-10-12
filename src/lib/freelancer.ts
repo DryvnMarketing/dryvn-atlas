@@ -35,11 +35,48 @@ export interface FLProject {
   title: string;
   preview_description: string;
   description?: string;
+  type?: "fixed" | "hourly";
   budget: { minimum: number; maximum?: number };
-  currency: { code: string };
+  currency: { code: string; sign?: string; exchange_rate?: number };
   jobs?: { name: string }[];
   submitdate: number; // unix seconds
+  time_submitted?: number;
   seo_url: string;
+  language?: string;
+  bidperiod?: number;
+  bid_stats?: { bid_count?: number; bid_avg?: number };
+  is_escrow_project?: boolean;
+  hourly_project_info?: { commitment?: { hours?: number; interval?: string } };
+  upgrades?: {
+    featured?: boolean; sealed?: boolean; NDA?: boolean; urgent?: boolean; pf_only?: boolean;
+  };
+}
+
+export interface FeedQuery {
+  query?: string;
+  type?: "fixed" | "hourly" | "all";
+  limit?: number;
+  offset?: number;
+  minBudget?: number; // in project currency
+  maxBudget?: number;
+  skillIds?: number[];
+}
+
+function projectParams(opts: FeedQuery): URLSearchParams {
+  const params = new URLSearchParams({
+    limit: String(opts.limit ?? 20),
+    offset: String(opts.offset ?? 0),
+    full_description: "true",
+    job_details: "true",
+    sort_field: "time_submitted",
+    project_types: opts.type && opts.type !== "all" ? opts.type : "fixed,hourly",
+    "languages[]": "en",
+  });
+  if (opts.query) params.set("query", opts.query);
+  if (opts.minBudget) params.set("min_avg_price", String(opts.minBudget));
+  if (opts.maxBudget) params.set("max_avg_price", String(opts.maxBudget));
+  for (const id of opts.skillIds ?? []) params.append("jobs[]", String(id));
+  return params;
 }
 
 /** Search active projects in the given budget band (fixed-price, USD-ish). */
@@ -65,6 +102,20 @@ export async function searchProjects(opts: {
   return result.projects ?? [];
 }
 
+/** Live project feed (newest first) for the Feed page — fixed and hourly. */
+export async function fetchFeed(opts: FeedQuery): Promise<{ projects: FLProject[]; total: number }> {
+  const result = await api<{ projects: FLProject[]; total_count?: number }>(
+    `/projects/0.1/projects/active/?${projectParams(opts).toString()}`
+  );
+  return { projects: result.projects ?? [], total: result.total_count ?? 0 };
+}
+
+/** One project with full detail (used by the bid editor + Quick Bid). */
+export async function getProject(projectId: number): Promise<FLProject> {
+  const params = new URLSearchParams({ full_description: "true", job_details: "true" });
+  return api<FLProject>(`/projects/0.1/projects/${projectId}/?${params.toString()}`);
+}
+
 /** Place a bid on a project. */
 export async function placeBid(opts: {
   projectId: number;
@@ -84,6 +135,22 @@ export async function placeBid(opts: {
       description: opts.description,
     }),
   });
+}
+
+export interface FLBid {
+  id: number;
+  bidder_id: number;
+  project_id: number;
+  amount: number;
+  period: number;
+}
+
+/** Fetch existing bids on a project, for competitive pricing. */
+export async function getProjectBids(projectId: number): Promise<FLBid[]> {
+  const params = new URLSearchParams({ limit: "100" });
+  params.append("projects[]", String(projectId));
+  const result = await api<{ bids: FLBid[] }>(`/projects/0.1/bids/?${params.toString()}`);
+  return result.bids ?? [];
 }
 
 export interface FLThread {

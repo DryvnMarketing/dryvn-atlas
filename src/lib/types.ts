@@ -31,6 +31,12 @@ export interface FreelancerProject {
   skills: string; // JSON array of skill names
   postedAt: string;
   url: string;
+  projectType: "fixed" | "hourly";
+  exchangeRate: number; // 1 unit of project currency in USD
+  bidCount: number | null;
+  bidAvg: number | null;
+  language: string;
+  flags: string; // JSON ProjectFlags
   fitScore: number | null; // 0-100 from scout evaluation
   fitReason: string | null;
   estimatedDays: number | null; // agent's delivery estimate
@@ -38,8 +44,53 @@ export interface FreelancerProject {
   createdAt: string;
 }
 
+/** Bid-blocking / bid-affecting traits the Freelancer API reports per project. */
+export interface ProjectFlags {
+  pfOnly?: boolean; // Preferred Freelancers only
+  escrow?: boolean; // needs a linked Escrow.com account
+  nda?: boolean;
+  sealed?: boolean;
+  featured?: boolean;
+  urgent?: boolean;
+  hourlyHours?: number; // weekly commitment on hourly projects
+}
+
+export interface Script {
+  id: number;
+  title: string;
+  instructions: string;
+  wordCount: number;
+  isDefault: boolean;
+  archived: boolean;
+  createdAt: string;
+}
+
+export interface ScriptStats extends Script {
+  sends: number;
+  replies: number;
+  replyRate: number; // 0-100
+  lastUsed: string | null;
+}
+
+export interface PortfolioItem {
+  id: number;
+  title: string;
+  description: string;
+  skills: string; // JSON array
+  link: string;
+}
+
+export interface PeriodRule {
+  id: number;
+  lowerUsd: number;
+  upperUsd: number;
+  days: number;
+}
+
 export interface Bid {
   id: number;
+  scriptId: number | null;
+  repliedAt: string | null;
   projectId: number;
   amount: number;
   periodDays: number;
@@ -77,6 +128,11 @@ export interface Settings {
   autoBid: boolean; // false = approval gate (default)
   autoReply: boolean; // false = approval gate (default)
   skills: string; // JSON array of service categories we sell
+  pricePct: number; // default bid = this % of the client's max budget
+  minFixedUsd: number; // skip fixed projects whose max budget is below this (USD-equivalent)
+  minHourlyUsd: number; // skip hourly projects whose max rate is below this (USD-equivalent)
+  attachPortfolio: boolean; // weave matching portfolio items into proposals
+  abTestScripts: boolean; // rotate auto-bids across all active scripts
 }
 
 export interface ActivityEntry {

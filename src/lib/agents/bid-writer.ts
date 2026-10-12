@@ -1,5 +1,7 @@
 import { complete, isLive as claudeLive, DRYVN_VOICE } from "./claude";
-import type { FreelancerProject } from "../types";
+import { DEFAULT_SCRIPT_INSTRUCTIONS } from "../db";
+import { clampProposal } from "../pricing";
+import type { FreelancerProject, PortfolioItem } from "../types";
 
 export interface BidDraft {
   amount: number;
@@ -7,57 +9,74 @@ export interface BidDraft {
   proposal: string;
 }
 
+export interface DraftOptions {
+  /** Instructions + target length from the chosen script. Falls back to Atlas's default rules. */
+  script?: { instructions: string; wordCount: number };
+  /** Price decided upstream (pricing %, rank pricing). When set the writer must not suggest another. */
+  priceOverride?: number;
+  /** Days (fixed projects) or weekly hours (hourly projects) decided upstream. */
+  periodOverride?: number;
+  /** User-entered past work that matches this project; the only work the writer may mention. */
+  portfolio?: PortfolioItem[];
+}
+
+type DraftProject = Pick<
+  FreelancerProject,
+  "title" | "description" | "budgetMin" | "budgetMax" | "skills" | "estimatedDays"
+> & { projectType?: "fixed" | "hourly"; currency?: string };
+
 /**
- * Bid agent: writes an outcome-priced proposal. Prices toward the top of the
- * client's band when the value story supports it (the "$3.5K budget, closed
- * at $5K" play — scaled to our month-1 window).
+ * Bid agent: writes a proposal by running the project through a script (a named
+ * set of writing instructions). Pricing is normally decided before this runs, so
+ * the proposal text and the submitted amount always agree.
  */
-export async function draftBid(
-  project: Pick<FreelancerProject, "title" | "description" | "budgetMin" | "budgetMax" | "skills" | "estimatedDays">
-): Promise<BidDraft> {
-  const anchor = Math.round(project.budgetMax * 0.92);
-  const periodDays = Math.max(2, Math.ceil((project.estimatedDays ?? 4) * 1.4)); // buffer for quality
+export async function draftBid(project: DraftProject, opts: DraftOptions = {}): Promise<BidDraft> {
+  const hourly = project.projectType === "hourly";
+  const anchor = opts.priceOverride ?? Math.round(project.budgetMax * 0.92);
+  const periodDays =
+    opts.periodOverride ?? (hourly ? 10 : Math.max(2, Math.ceil((project.estimatedDays ?? 4) * 1.4))); // buffer for quality
+  const script = opts.script ?? { instructions: DEFAULT_SCRIPT_INSTRUCTIONS, wordCount: 120 };
+  const cur = project.currency ?? "USD";
 
   if (!claudeLive()) {
     return {
       amount: anchor,
       periodDays,
-      proposal: `Hi! DRYVN here — we build ${JSON.parse(project.skills || "[]").slice(0, 2).join(" and ") || "digital products"} end-to-end, in-house. We've read your brief for "${project.title}" and can deliver the full outcome within ${periodDays} days, including revisions. We'd love to walk you through our approach — when suits a quick chat? (Template mode — set ANTHROPIC_API_KEY for tailored proposals.)`,
+      proposal: clampProposal(
+        `Hi! DRYVN here. We build ${JSON.parse(project.skills || "[]").slice(0, 2).join(" and ") || "digital products"} end-to-end, in-house. We've read your brief for "${project.title}" and can deliver the full outcome within ${periodDays} days, including revisions. We'd love to walk you through our approach. When suits a quick chat? (Template mode: set ANTHROPIC_API_KEY for tailored proposals.)`
+      ),
     };
   }
+
+  const portfolioBlock = opts.portfolio?.length
+    ? `\nRELEVANT PAST WORK (the ONLY past work you may mention. Weave in at most one item, in one short natural sentence. Never invent other work, clients, results or links):\n${opts.portfolio
+        .map((p) => `- ${p.title}${p.description ? `: ${p.description}` : ""}`)
+        .join("\n")}\n`
+    : "";
+
+  const priceBlock =
+    opts.priceOverride !== undefined
+      ? `Our price is fixed at ${opts.priceOverride} ${cur}${hourly ? " per hour" : ""}. It is already set by our pricing strategy. Do not suggest a different number anywhere in the proposal or the JSON. Use exactly ${opts.priceOverride} for "amount", and do not reference milestone amounts or totals that imply a different price.`
+      : `"amount" must be within the client's budget band. Price high in the band only when the proposal justifies the value.`;
 
   const raw = await complete(
     `${DRYVN_VOICE}
 
-You are DRYVN's Bid agent. Write a winning Freelancer.com bid proposal.
-Rules:
-- Open with a line that proves we actually read THEIR brief (reference a specific detail).
-- 3 short paragraphs max, 90-150 words total, no bullet-point walls, no generic filler.
-- State a concrete deliverable and timeline.
-- End with one practical question to start a conversation.
-- Never mention being an AI, an agency of agents, or outsourcing.
+You are DRYVN's Bid agent. Write a Freelancer.com bid proposal by following this script exactly:
 
-WRITE LIKE A BUSY PROFESSIONAL TYPING, NOT LIKE MARKETING COPY:
-- ALWAYS first-person plural: "we", "we'll", "our". NEVER "I", "I'll", "me", "my" —
-  DRYVN is a studio and speaks as one in every sentence.
-- Contractions always (we'll, it's, don't). Vary sentence length; short ones are good.
-- At most ONE em-dash in the whole proposal. No semicolons.
-- Never open by flattering their thinking ("You've clearly...", "...is exactly the
-  right instinct"). Just get into the work.
-- Banned words/phrases: seamless(ly), leverage, robust, elevate, craft(ed),
-  tailored, delve, streamline, "bring to life", "exactly the kind of", "we enjoy",
-  "from day one", "nail down".
-- Plain verbs over fancy ones: build, fix, match, ship, hand over.
-- It should read like it took 4 minutes to type, with one small imperfection of
-  rhythm, not like a polished pitch.
+--- SCRIPT ---
+${script.instructions}
+--- END SCRIPT ---
 
+LENGTH: about ${script.wordCount} words, and never more than 1400 characters in total (Freelancer rejects longer proposals).
+${hourly ? `This is an HOURLY project: talk about our rate and weekly availability, never a project total. Our weekly limit on this bid is ${periodDays} hours, so if you mention availability use exactly that.\n` : ""}${portfolioBlock}
 Respond with ONLY JSON: {"amount": number, "periodDays": number, "proposal": "text"}.
 The proposal value must be a single valid JSON string (escape newlines as \\n).
-Amount must be within the client's budget band; price high in the band only
-when the proposal justifies the value.`,
+${priceBlock}`,
     `PROJECT
 Title: ${project.title}
-Budget: $${project.budgetMin}–$${project.budgetMax}
+Type: ${hourly ? "hourly" : "fixed price"}
+Budget: ${project.budgetMin}–${project.budgetMax} ${cur}
 Skills: ${project.skills}
 Estimated delivery: ${project.estimatedDays ?? "unknown"} days
 Description:
@@ -70,9 +89,9 @@ ${project.description.slice(0, 3000)}`,
     const parsed = JSON.parse(cleaned);
     const amount = Number(parsed.amount);
     return {
-      amount: isFinite(amount) && amount > 0 ? Math.min(amount, project.budgetMax) : anchor,
-      periodDays: Math.max(1, Number(parsed.periodDays) || periodDays),
-      proposal: String(parsed.proposal ?? "").trim(),
+      amount: opts.priceOverride ?? (isFinite(amount) && amount > 0 ? Math.min(amount, project.budgetMax) : anchor),
+      periodDays: opts.periodOverride ?? Math.max(1, Number(parsed.periodDays) || periodDays),
+      proposal: clampProposal(String(parsed.proposal ?? "")),
     };
   } catch {
     // Malformed JSON (usually unescaped newlines inside the proposal string).
@@ -86,11 +105,12 @@ ${project.description.slice(0, 3000)}`,
         ? "" // never show a client raw JSON — template fallback below
         : cleaned;
     return {
-      amount: amountMatch ? Math.min(Number(amountMatch[1]), project.budgetMax) : anchor,
-      periodDays: daysMatch ? Number(daysMatch[1]) : periodDays,
-      proposal:
+      amount: opts.priceOverride ?? (amountMatch ? Math.min(Number(amountMatch[1]), project.budgetMax) : anchor),
+      periodDays: opts.periodOverride ?? (daysMatch ? Number(daysMatch[1]) : periodDays),
+      proposal: clampProposal(
         salvaged ||
-        `We've read your brief for "${project.title}" and can deliver the full scope within ${periodDays} days, including revisions. Happy to walk you through our approach — when suits a quick chat?`,
+          `We've read your brief for "${project.title}" and can deliver the full scope within ${periodDays} days, including revisions. Happy to walk you through our approach. When suits a quick chat?`
+      ),
     };
   }
 }

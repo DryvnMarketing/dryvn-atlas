@@ -92,6 +92,13 @@ async function syncThreads(result: CommsRunResult) {
       const direction = m.from_user === ourId ? "outbound" : "inbound";
       const r = insertMsg.run(threadRow.id, direction, m.message ?? "", direction === "inbound" ? "received" : "sent", m.time_created, m.id);
       if (r.changes > 0) result.messagesSynced++;
+      // A client writing back on a project we bid on is a "reply" for the script
+      // that wrote that bid — this is what the Scripts page reply-rate measures.
+      if (r.changes > 0 && direction === "inbound") {
+        db.prepare(
+          "UPDATE bids SET repliedAt = datetime('now') WHERE projectId = ? AND status IN ('placed','won','lost') AND repliedAt IS NULL"
+        ).run(project.id);
+      }
     }
     if (msgs.length) {
       db.prepare("UPDATE threads SET lastMessageAt = datetime(?, 'unixepoch') WHERE id = ?")
@@ -125,17 +132,24 @@ async function handleThread(
 ) {
   const db = getDb();
   {
-    const history = db.prepare(
-      "SELECT direction, body, status FROM messages WHERE threadId = ? AND status != 'discarded' ORDER BY sentAt ASC, id ASC"
+    // Include discarded drafts here so a discarded reply still counts as "we've
+    // handled this inbound message" — otherwise filtering them out makes the
+    // client's message look unanswered again on every following cycle, and the
+    // agent redrafts a "new" reply to the same old message forever.
+    const allMessages = db.prepare(
+      "SELECT direction, body, status FROM messages WHERE threadId = ? ORDER BY sentAt ASC, id ASC"
     ).all(t.id) as { direction: "inbound" | "outbound"; body: string; status: string }[];
-    if (!history.length) return;
-    const last = history[history.length - 1];
-    const hasPendingDraft = history.some((m) => m.status === "pending_approval");
+    if (!allMessages.length) return;
+    const last = allMessages[allMessages.length - 1];
+    const hasPendingDraft = allMessages.some((m) => m.status === "pending_approval");
     if (last.direction !== "inbound" || hasPendingDraft) return;
 
+    // The conversation shown to the model should still skip discarded/pending
+    // drafts — those were never actually said in the thread.
+    const history = allMessages.filter((m) => m.status !== "pending_approval" && m.status !== "discarded");
     const draft = await draftReply({
       projectTitle: t.projectTitle,
-      history: history.filter((m) => m.status !== "pending_approval").map((m) => ({ direction: m.direction, body: m.body })),
+      history: history.map((m) => ({ direction: m.direction, body: m.body })),
     });
     result.drafted++;
 

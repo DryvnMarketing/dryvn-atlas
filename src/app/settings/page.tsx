@@ -13,14 +13,21 @@ interface SettingsForm {
   autoBid: boolean;
   autoReply: boolean;
   skills: string;
+  pricePct: number;
+  minFixedUsd: number;
+  minHourlyUsd: number;
 }
+
+interface PeriodRule { lowerUsd: number; upperUsd: number; days: number }
 
 export default function SettingsPage() {
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [saved, setSaved] = useState(false);
+  const [rules, setRules] = useState<PeriodRule[]>([]);
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setForm);
+    fetch("/api/period-rules").then((r) => r.json()).then(setRules);
   }, []);
 
   if (!form) return <div className="text-muted text-sm">Loading…</div>;
@@ -36,6 +43,12 @@ export default function SettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const res = await fetch("/api/period-rules", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rules),
+    });
+    setRules(await res.json());
     setSaved(true);
   }
 
@@ -67,6 +80,46 @@ export default function SettingsPage() {
           {num("bidMinUsd", "Minimum ($)")}
           {num("bidMaxUsd", "Maximum ($)")}
         </div>
+      </section>
+
+      <section className="rounded-lg border border-edge bg-surface p-5 space-y-4">
+        <h2 className="text-sm font-medium">Bid pricing</h2>
+        <div className="flex flex-wrap gap-6">
+          {num("pricePct", "Default bid (% of client's max budget)", "Used by Quick Bid, auto-bids and the Feed. Small-job rank pricing still overrides it.")}
+          {num("minFixedUsd", "Minimum fixed budget ($)", "Skip fixed projects whose max budget is below this. 0 = off.")}
+          {num("minHourlyUsd", "Minimum hourly rate ($/hr)", "Skip hourly projects whose max rate is below this. 0 = off.")}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-edge bg-surface p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-medium">Bid period by price</h2>
+          <p className="text-xs text-muted mt-0.5">
+            How many days to quote, based on the bid amount (in USD). The first matching row wins; with no match Atlas uses
+            the client&apos;s suggested period. Hourly bids use a weekly-hours limit instead.
+          </p>
+        </div>
+        {rules.length > 0 && (
+          <div className="space-y-2">
+            {rules.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="text-muted w-10">from $</span>
+                <input type="number" value={r.lowerUsd} onChange={(e) => setRules(rules.map((x, j) => (j === i ? { ...x, lowerUsd: Number(e.target.value) } : x)))}
+                  className="w-24 rounded-md border border-edge bg-raised px-2 py-1.5 font-mono" />
+                <span className="text-muted">to $</span>
+                <input type="number" value={r.upperUsd} onChange={(e) => setRules(rules.map((x, j) => (j === i ? { ...x, upperUsd: Number(e.target.value) } : x)))}
+                  className="w-24 rounded-md border border-edge bg-raised px-2 py-1.5 font-mono" />
+                <span className="text-muted">→</span>
+                <input type="number" value={r.days} onChange={(e) => setRules(rules.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))}
+                  className="w-16 rounded-md border border-edge bg-raised px-2 py-1.5 font-mono" />
+                <span className="text-muted">days</span>
+                <button onClick={() => setRules(rules.filter((_, j) => j !== i))} className="ml-2 text-xs hover:underline" style={{ color: "var(--serious)" }}>Remove</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={() => { setRules([...rules, { lowerUsd: 0, upperUsd: 100, days: 3 }]); setSaved(false); }}
+          className="rounded-md border border-edge px-3 py-1.5 text-xs text-accent-ink hover:bg-raised">+ Add range</button>
       </section>
 
       <section className="rounded-lg border border-edge bg-surface p-5 space-y-4">

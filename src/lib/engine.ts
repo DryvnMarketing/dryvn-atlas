@@ -1,11 +1,25 @@
 import { getDb, logActivity } from "./db";
 import { getSettings, checkCapacity, inBidWindow } from "./governor";
 import { assessFit } from "./agents/scout";
-import { draftBid } from "./agents/bid-writer";
+import { prepareBid, placeLive, recordBid } from "./bidder";
+import { pickScript } from "./scripts";
+import { ALLOWED_CURRENCIES, bidBlockers, normalizeProject, upsertProject, type NormalizedProject } from "./feed";
+import { priceForThirdCheapest, priceFromBudget } from "./pricing";
 import * as freelancer from "./freelancer";
-import type { FreelancerProject } from "./types";
+import type { FreelancerProject, ProjectFlags } from "./types";
 
 const FIT_THRESHOLD = 55;
+
+// Review-building volume push: in this band, price to land 3rd cheapest
+// (visibly affordable, not the single lowest bid) instead of the normal
+// value-anchored price, so the profile actually gets looked at.
+const RANK_PRICING_BAND = { min: 20, max: 80 };
+
+// Auto-bid only fires inside this fit-score band — strong, confident matches.
+// Below it we're not sure enough to skip review; above it (rare) still gets
+// a human look since it's usually an unusual/high-value scope.
+const AUTO_BID_SCORE_MIN = 70;
+const AUTO_BID_SCORE_MAX = 95;
 
 export interface EngineRunResult {
   discovered: number;
@@ -21,8 +35,10 @@ export interface EngineRunResult {
  * 1. Pull fresh projects (Freelancer API, or demo samples without a token)
  * 2. Filter to the month-1 budget window
  * 3. Score fit; skip below threshold
- * 4. Draft bids for good fits → queue as pending_approval
- *    (auto-place only when settings.autoBid is on AND governor allows)
+ * 4. Draft bids for good fits → queue as pending_approval, unless
+ *    settings.autoBid is on AND fit score lands in the auto-bid band
+ *    (AUTO_BID_SCORE_MIN–AUTO_BID_SCORE_MAX), in which case place it live
+ *    immediately.
  */
 export async function runScoutCycle(): Promise<EngineRunResult> {
   const db = getDb();
@@ -32,19 +48,24 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
   const notes: string[] = [];
   let discovered = 0, evaluated = 0, drafted = 0, skipped = 0;
 
-  const incoming = live
-    ? await fetchLiveProjects(s.bidMinUsd, s.bidMaxUsd, skills)
-    : demoProjects();
   if (!live) notes.push("Demo mode: no FREELANCER_OAUTH_TOKEN set — using sample projects.");
 
-  const insert = db.prepare(
-    `INSERT OR IGNORE INTO projects
-      (externalId, title, description, budgetMin, budgetMax, currency, skills, postedAt, url, status)
-     VALUES (@externalId, @title, @description, @budgetMin, @budgetMax, @currency, @skills, @postedAt, @url, 'discovered')`
-  );
-  for (const p of incoming) {
-    const res = insert.run(p);
-    if (res.changes > 0) discovered++;
+  if (live) {
+    const exists = db.prepare("SELECT 1 FROM projects WHERE externalId = ?");
+    for (const p of await fetchLiveProjects(s.bidMinUsd, s.bidMaxUsd, skills)) {
+      const known = !!exists.get(p.externalId);
+      upsertProject(p);
+      if (!known) discovered++;
+    }
+  } else {
+    const insert = db.prepare(
+      `INSERT OR IGNORE INTO projects
+        (externalId, title, description, budgetMin, budgetMax, currency, skills, postedAt, url, status)
+       VALUES (@externalId, @title, @description, @budgetMin, @budgetMax, @currency, @skills, @postedAt, @url, 'discovered')`
+    );
+    for (const p of demoProjects()) {
+      if (insert.run(p).changes > 0) discovered++;
+    }
   }
   logActivity("scout", "cycle_discover", `${discovered} new projects discovered`);
 
@@ -53,9 +74,33 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
     .all() as FreelancerProject[];
 
   for (const project of fresh) {
+    if (!ALLOWED_CURRENCIES.has(project.currency)) {
+      db.prepare("UPDATE projects SET status = 'skipped', fitReason = ? WHERE id = ?")
+        .run(`Currency ${project.currency} not in USD/EUR/GBP/AUD`, project.id);
+      skipped++;
+      continue;
+    }
     if (!inBidWindow(project.budgetMin, project.budgetMax)) {
       db.prepare("UPDATE projects SET status = 'skipped', fitReason = ? WHERE id = ?")
         .run(`Outside month-1 bid window ($${s.bidMinUsd}–$${s.bidMaxUsd})`, project.id);
+      skipped++;
+      continue;
+    }
+    // Skip what Freelancer would reject anyway (Preferred-only, non-English) or
+    // what is under the user's minimums — before spending a Claude call on it.
+    const blocked = bidBlockers(
+      {
+        flags: safeFlags(project.flags),
+        language: project.language,
+        projectType: project.projectType,
+        budgetMax: project.budgetMax,
+        exchangeRate: project.exchangeRate,
+      },
+      s
+    ).filter((b) => b.level === "block");
+    if (blocked.length) {
+      db.prepare("UPDATE projects SET status = 'skipped', fitReason = ? WHERE id = ?")
+        .run(blocked.map((b) => b.text).join("; "), project.id);
       skipped++;
       continue;
     }
@@ -81,16 +126,73 @@ export async function runScoutCycle(): Promise<EngineRunResult> {
     }
 
     const capacity = checkCapacity(project.budgetMax);
-    const bid = await draftBid({ ...project, estimatedDays: fit.estimatedDays });
-    // The bid window caps what we charge, not just which projects we enter.
-    const amount = Math.min(bid.amount, s.bidMaxUsd);
-    const status = s.autoBid && capacity.canBid ? "approved" : "pending_approval";
-    db.prepare(
-      "INSERT INTO bids (projectId, amount, periodDays, proposal, status) VALUES (?, ?, ?, ?, ?)"
-    ).run(project.id, amount, bid.periodDays, bid.proposal, status);
+
+    // Decide pricing BEFORE drafting the proposal, so the written text and the
+    // submitted amount always agree (a post-hoc override left them mismatched
+    // before: proposal mentioning the client's real budget while the bid
+    // amount had been silently dropped to a rank-priced figure).
+    // Containment, not overlap: a project's displayed range is a Freelancer
+    // budget *bucket* (e.g. "$30–$250"), so a loose overlap check against
+    // RANK_PRICING_BAND caught real $150-average jobs just because the
+    // bucket's low end touched $80. Only apply aggressive rank pricing when
+    // the project's own ceiling actually sits inside the small-job band.
+    const inRankBand = project.budgetMax <= RANK_PRICING_BAND.max;
+    let priceOverride: number | undefined;
+    let pricingNote = "";
+    if (live && inRankBand && project.externalId) {
+      try {
+        const rivals = await freelancer.getProjectBids(project.externalId);
+        const rivalAmounts = rivals.map((b) => b.amount);
+        priceOverride = priceForThirdCheapest(rivalAmounts, project.budgetMin, project.budgetMax);
+        pricingNote = ` (rank-priced vs ${rivalAmounts.length} rival bid${rivalAmounts.length === 1 ? "" : "s"}, targeting 3rd cheapest)`;
+      } catch {
+        // Bids fetch failed — fall back to normal value-anchored pricing.
+      }
+    }
+
+    // Price: rank price (small jobs) else the configured % of the client's budget,
+    // never above the bid window. The script decides how the proposal is written.
+    const baseAmount = priceOverride ?? priceFromBudget(project.budgetMin, project.budgetMax, s.pricePct);
+    const amount = Math.min(baseAmount, s.bidMaxUsd);
+    const script = pickScript(s.abTestScripts);
+    const bid = await prepareBid(
+      {
+        title: project.title,
+        description: project.description,
+        budgetMin: project.budgetMin,
+        budgetMax: project.budgetMax,
+        currency: project.currency,
+        exchangeRate: project.exchangeRate,
+        projectType: project.projectType,
+        skills: JSON.parse(project.skills || "[]"),
+        hourlyHours: safeFlags(project.flags).hourlyHours,
+        estimatedDays: fit.estimatedDays,
+      },
+      { script, amountOverride: amount }
+    );
+
+    const eligibleForAutoBid =
+      s.autoBid &&
+      capacity.canBid &&
+      fit.fitScore >= AUTO_BID_SCORE_MIN &&
+      fit.fitScore <= AUTO_BID_SCORE_MAX;
+
+    let status: "placed" | "pending_approval" = "pending_approval";
+    let placeNote = "";
+    if (eligibleForAutoBid && live && project.externalId && process.env.FREELANCER_USER_ID) {
+      try {
+        await placeLive(project.externalId, bid.amount, bid.periodDays, bid.proposal);
+        status = "placed";
+        placeNote = ` → auto-placed live (fit ${Math.round(fit.fitScore)}, script "${script.title}")`;
+      } catch (err) {
+        placeNote = ` → auto-place failed (${String(err).slice(0, 150)}), queued for review instead`;
+      }
+    }
+
+    recordBid(project.id, { ...bid, scriptId: script.id }, status);
     db.prepare("UPDATE projects SET status = 'bidding' WHERE id = ?").run(project.id);
     drafted++;
-    logActivity("bid", "draft", `$${bid.amount} / ${bid.periodDays}d on "${project.title}" → ${status}`);
+    logActivity("bid", "draft", `${bid.amount} ${project.currency} / ${bid.periodDays}${project.projectType === "hourly" ? "h/wk" : "d"} on "${project.title}" → ${status}${pricingNote}${placeNote}`);
     if (!capacity.canAcceptAward) {
       notes.push(`Governor: ${capacity.reason}`);
     }
@@ -111,7 +213,7 @@ function searchQueriesFromSkills(skills: string[]): string[] {
   return [...new Set([...fromSkills, ...aliases])].slice(0, 14);
 }
 
-async function fetchLiveProjects(min: number, max: number, skills: string[]) {
+async function fetchLiveProjects(min: number, max: number, skills: string[]): Promise<NormalizedProject[]> {
   const queries = searchQueriesFromSkills(skills);
   const seen = new Set<number>();
   const results: Awaited<ReturnType<typeof freelancer.searchProjects>> = [];
@@ -128,17 +230,11 @@ async function fetchLiveProjects(min: number, max: number, skills: string[]) {
       // One failed query shouldn't kill the cycle; the rest still run.
     }
   }
-  return results.map((p) => ({
-    externalId: p.id,
-    title: p.title,
-    description: p.description ?? p.preview_description ?? "",
-    budgetMin: p.budget.minimum,
-    budgetMax: p.budget.maximum ?? p.budget.minimum,
-    currency: p.currency.code,
-    skills: JSON.stringify((p.jobs ?? []).map((j) => j.name)),
-    postedAt: new Date(p.submitdate * 1000).toISOString(),
-    url: `https://www.freelancer.com/projects/${p.seo_url}`,
-  }));
+  return results.map(normalizeProject);
+}
+
+function safeFlags(raw: string): ProjectFlags {
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
 }
 
 /** Sample projects so the whole pipeline is testable before API keys exist. */

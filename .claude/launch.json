@@ -3,8 +3,9 @@
   "configurations": [
     {
       "name": "atlas-dev",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeExecutable": "C:\\Users\\info\\node\\node.exe",
       "runtimeArgs": [
+        "--use-system-ca",
         "C:\\Users\\info\\Documents\\GitHub\\dryvn-atlas\\node_modules\\next\\dist\\bin\\next",
         "dev",
         "C:\\Users\\info\\Documents\\GitHub\\dryvn-atlas"

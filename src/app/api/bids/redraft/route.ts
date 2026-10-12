@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb, logActivity } from "@/lib/db";
 import { getSettings } from "@/lib/governor";
-import { draftBid } from "@/lib/agents/bid-writer";
+import { prepareBid } from "@/lib/bidder";
+import { getDefaultScript } from "@/lib/scripts";
+import { priceFromBudget } from "@/lib/pricing";
 import type { FreelancerProject } from "@/lib/types";
 
 // POST /api/bids/redraft — rewrite every pending proposal with the current
@@ -25,9 +27,23 @@ export async function POST() {
     const failures: number[] = [];
     for (const p of pending) {
       try {
-        const draft = await draftBid(p);
-        db.prepare("UPDATE bids SET proposal = ?, amount = ?, periodDays = ? WHERE id = ?")
-          .run(draft.proposal, Math.min(draft.amount, s.bidMaxUsd), draft.periodDays, p.bidId);
+        const script = getDefaultScript();
+        const draft = await prepareBid(
+          {
+            title: p.title,
+            description: p.description,
+            budgetMin: p.budgetMin,
+            budgetMax: p.budgetMax,
+            currency: p.currency,
+            exchangeRate: p.exchangeRate,
+            projectType: p.projectType,
+            skills: JSON.parse(p.skills || "[]"),
+            estimatedDays: p.estimatedDays,
+          },
+          { script, amountOverride: Math.min(priceFromBudget(p.budgetMin, p.budgetMax, s.pricePct), s.bidMaxUsd) }
+        );
+        db.prepare("UPDATE bids SET proposal = ?, amount = ?, periodDays = ?, scriptId = ? WHERE id = ?")
+          .run(draft.proposal, draft.amount, draft.periodDays, script.id, p.bidId);
         redrafted++;
       } catch {
         failures.push(p.bidId);
